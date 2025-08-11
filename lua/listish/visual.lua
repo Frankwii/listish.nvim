@@ -1,8 +1,7 @@
 local M = {}
 
 ---@type Extmarks
-M.extmarks = { -- {{{
-  unique_id = "Z",
+M.extmarks = {
   group = vim.api.nvim_create_augroup("LISTISH_AUTOCMDS", { clear = true }),
   ns = vim.api.nvim_create_namespace("listish-ns"),
   listener_name = "listish_autocmd_listener",
@@ -24,25 +23,30 @@ M.extmarks = { -- {{{
   qf_ext_hl_group = "ListishQfExt",
   loc_badge = "Locationlist Note",
   loc_ext_hl_group = "ListishLocalExt",
-} -- }}}
+}
 
 ---Checks a variable is set on the buffer. If so, it returns truw, otherwise
 -- it will set it and returns -false.
 ---@param bufnr number
 ---@return boolean
-local function buf_autocmd_is_set(bufnr) --{{{
+local function buf_autocmd_is_set(bufnr) --
   local ok, _ = pcall(vim.api.nvim_buf_get_var, bufnr, M.extmarks.listener_name)
   if ok then
     return true
   end
   vim.api.nvim_buf_set_var(bufnr, M.extmarks.listener_name, true)
   return false
-end --}}}
+end
+
+local function is_listish_item(item)
+  local ud = item.user_data
+  return type(ud) == "table" and ud.listish == true
+end
 
 ---For each item in the items list, it creates an extmark.
 ---@param items ListItem[]
 ---@param is_loc boolean specifies what extmark text and colour to use.
-function M.insert_extmarks(items, is_loc) -- {{{
+function M.insert_extmarks(items, is_loc)
   local badge = M.extmarks.qf_badge
   local hl_group = M.extmarks.qf_ext_hl_group
   local sigil = M.extmarks.qf_sigil .. " "
@@ -58,18 +62,18 @@ function M.insert_extmarks(items, is_loc) -- {{{
     hl_mode = "combine",
   }
   for _, item in ipairs(items) do
-    if item.type == M.extmarks.unique_id then
+    if is_listish_item(item) then
       local line = vim.api.nvim_buf_get_lines(item.bufnr, item.lnum - 1, item.lnum, false)
       line = line[1] == item.text and badge or item.text
       opts.virt_text[1][1] = sigil .. line
+      vim.api.nvim_buf_set_extmark(item.bufnr, M.extmarks.ns, item.lnum - 1, item.col - 1, opts)
     end
-    vim.api.nvim_buf_set_extmark(item.bufnr, M.extmarks.ns, item.lnum - 1, item.col - 1, opts)
   end
-end -- }}}
+end
 
 ---Return only valid and loaded buffer handles.
 ---@return number[]
-local function buffer_list() -- {{{
+local function buffer_list()
   local buffers = {}
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_is_loaded(buf) then
@@ -77,23 +81,23 @@ local function buffer_list() -- {{{
     end
   end
   return buffers
-end -- }}}
+end
 
 ---Merges both lists and returns the new merged list.
 ---@param list1 ListItem[]
 ---@param list2 ListItem[]
 ---@return ListItem[]
-local function merge_list(list1, list2) -- {{{
+local function merge_list(list1, list2)
   for i = 1, #list2 do
     list1[#list1 + 1] = list2[i]
   end
   return list1
-end -- }}}
+end
 
 ---Updates all the extmarks based on the qflist and loclist values. We don't
 ---have a mechanism to detect item removeal, therefore it has to clear the
 ---extmarks and add them again on all buffers.
-function M.update_extmarks() -- {{{
+function M.update_extmarks()
   local buffers = buffer_list()
   for _, buf in ipairs(buffers) do
     vim.api.nvim_buf_clear_namespace(buf, M.extmarks.ns, 0, -1)
@@ -119,39 +123,33 @@ function M.update_extmarks() -- {{{
   local items = {}
   if #loclist > 0 then
     for _, item in ipairs(loclist) do
-      if item.type == M.extmarks.unique_id then
+      if is_listish_item(item) then
         table.insert(items, item)
       end
     end
     M.insert_extmarks(items, true)
   end
-end -- }}}
+end
 
 ---For each item in the items list, it creates a sign.
 ---@param items ListItem[]
 ---@param is_local boolean specifies the highlight group
-function M.insert_signs(items, is_local) -- {{{
+function M.insert_signs(items, is_local)
   local sigil = M.extmarks.qf_sigil
   if is_local then
     sigil = M.extmarks.local_sigil
   end
 
   for _, item in ipairs(items) do
-    vim.fn.sign_place(
-      0,
-      M.extmarks.sign_group,
-      sigil,
-      item.bufnr,
-      { lnum = item.lnum, priority = M.extmarks.priority }
-    )
+    vim.fn.sign_place(0, M.extmarks.sign_group, sigil, item.bufnr, { lnum = item.lnum, priority = M.extmarks.priority })
   end
-end -- }}}
+end
 
 ---Updates all the signs based on the qflist and loclist values. We don't
 -- have a mechanism to detect item removeal, therefore it has to clear the
 -- signs and add them again on all buffers.
 ---@param remove boolean|nil if set to true the signs will be removed
-function M.update_signs(remove) -- {{{
+function M.update_signs(remove)
   vim.fn.sign_unplace(M.extmarks.sign_group)
 
   local loclist = {}
@@ -180,18 +178,18 @@ function M.update_signs(remove) -- {{{
   local items = {}
   if #loclist > 0 then
     for _, item in ipairs(loclist) do
-      if item.type == M.extmarks.unique_id then
+      if is_listish_item(item) then
         table.insert(items, item)
       end
     end
     M.insert_signs(items, true)
   end
-end -- }}}
+end
 
 ---Returns buffer handles that appear in the list.
 ---@param is_local boolean
 ---@return number[]
-local function get_buffers_in_list(is_local) -- {{{
+local function get_buffers_in_list(is_local)
   if is_local then
     return { 0 }
   end
@@ -207,10 +205,10 @@ local function get_buffers_in_list(is_local) -- {{{
     table.insert(list, item)
   end
   return list
-end -- }}}
+end
 
 ---@param is_local boolean specifies what sign, extmark text and colour to use.
-function M.setup_buf_autocmds(is_local) -- {{{
+function M.setup_buf_autocmds(is_local)
   local buffers = get_buffers_in_list(is_local)
   for _, bufnr in ipairs(buffers) do
     if not buf_autocmd_is_set(bufnr) then
@@ -234,7 +232,7 @@ function M.setup_buf_autocmds(is_local) -- {{{
       })
     end
   end
-end -- }}}
+end
 
 return M
 

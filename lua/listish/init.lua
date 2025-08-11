@@ -1,8 +1,12 @@
 ---@type Quick
 local quick = require("arshlib.quick")
 
-local unique_id = "Z"
 local visual = require("listish.visual")
+
+local function is_listish_item(item)
+  local ud = item.user_data
+  return type(ud) == "table" and ud.listish == true
+end
 
 ---When using `dd` in the quickfix list, remove the item from the quickfix
 -- list.
@@ -84,7 +88,7 @@ local function insert_note_to_list(note, is_loc) --
     lnum = location[1],
     col = location[2] + 1,
     text = note,
-    type = unique_id,
+    user_data = { listish = true }
   }
   insert_list({ item }, is_loc)
 end
@@ -115,7 +119,7 @@ end
 local function filter_listish_items(cur_list)
   local new_list = {}
   for _, item in ipairs(cur_list) do
-    if item.type ~= unique_id then
+    if is_listish_item(item) then
       table.insert(new_list, item)
     end
   end
